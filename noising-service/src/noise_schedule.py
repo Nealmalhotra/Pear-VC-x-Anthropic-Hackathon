@@ -65,6 +65,13 @@ class SEDDNoiseSchedule:
         elif self.schedule_type == "quadratic":
             return np.linspace(self.beta_min**0.5, self.beta_max**0.5, self.num_timesteps) ** 2
         
+        elif self.schedule_type == "sedd_entropy":
+            steps = self.num_timesteps
+            sigma_vals = np.exp(np.linspace(np.log(self.beta_min), np.log(self.beta_max), steps))
+            sigma_prev = np.concatenate(([0.0], sigma_vals[:-1]))
+            betas = 1.0 - np.exp(-(sigma_vals - sigma_prev))
+            return np.clip(betas, 0.0, 1.0)
+        
         else:
             raise ValueError(f"Unknown schedule type: {self.schedule_type}")
 
