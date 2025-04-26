@@ -96,7 +96,7 @@ class TestSEDDNoiseSchedule:
         assert schedule.alphas_cumprod[-1] > 0.0 and schedule.alphas_cumprod[-1] < 0.1
         assert np.all(np.diff(schedule.alphas_cumprod) <= 0)  # Should be monotonically decreasing
     
-    @pytest.mark.parametrize("schedule_type", ["linear", "cosine", "quadratic"])
+    @pytest.mark.parametrize("schedule_type", ["linear", "cosine", "quadratic", "sedd_entropy"])
     def test_schedule_types(self, schedule_type):
         """Test different schedule types."""
         vocab_size = 100
@@ -112,6 +112,128 @@ class TestSEDDNoiseSchedule:
         assert np.all(schedule.betas >= 0)
         assert np.all(schedule.betas <= 1)
         assert len(schedule.betas) == num_timesteps
+    
+    def test_sedd_entropy_schedule(self):
+        """Test specific properties of the SEDD entropy schedule."""
+        vocab_size = 5000
+        num_timesteps = 500
+        beta_min = 0.0001
+        beta_max = 0.02
+        
+        schedule = SEDDNoiseSchedule(
+            vocab_size=vocab_size,
+            num_timesteps=num_timesteps,
+            beta_min=beta_min,
+            beta_max=beta_max,
+            schedule_type="sedd_entropy"
+        )
+        
+        # Check that betas are calculated according to SEDD entropy formula
+        # The implementation creates sigma values on a log scale
+        sigma_vals = np.exp(np.linspace(np.log(beta_min), np.log(beta_max), num_timesteps))
+        sigma_prev = np.concatenate(([0.0], sigma_vals[:-1]))
+        expected_betas = 1.0 - np.exp(-(sigma_vals - sigma_prev))
+        expected_betas = np.clip(expected_betas, 0.0, 1.0)
+        
+        # Check that the calculated betas match expected values
+        assert np.allclose(schedule.betas, expected_betas)
+        
+        # Test applying the SEDD entropy schedule to math proof tokens
+        x_start = np.array([PROOF_TOKENS])
+        t = 250  # Middle timestep
+        
+        # Apply noise with SEDD entropy schedule
+        x_t = schedule.q_sample(x_start, t)
+        
+        # Check basic properties
+        assert x_t.shape == x_start.shape
+        assert np.all(x_t >= 0)
+        assert np.all(x_t < vocab_size)
+        
+        # Test with TokenNoiser
+        noiser = TokenNoiser(
+            vocab_size=vocab_size,
+            num_timesteps=num_timesteps,
+            schedule_type="sedd_entropy"
+        )
+        
+        # Apply noise to proof tokens
+        noised_tokens = noiser.apply_noise(PROOF_TOKENS, t)
+        
+        # Check that the result is valid
+        assert isinstance(noised_tokens, list)
+        assert len(noised_tokens) == len(PROOF_TOKENS)
+        assert all(0 <= token < vocab_size for token in noised_tokens)
+    
+    def test_compare_schedule_types(self):
+        """Compare different schedule types, including SEDD entropy."""
+        vocab_size = 5000
+        num_timesteps = 500
+        
+        # Create different schedule types
+        schedules = {
+            "linear": SEDDNoiseSchedule(vocab_size, num_timesteps, schedule_type="linear"),
+            "cosine": SEDDNoiseSchedule(vocab_size, num_timesteps, schedule_type="cosine"),
+            "quadratic": SEDDNoiseSchedule(vocab_size, num_timesteps, schedule_type="quadratic"),
+            "sedd_entropy": SEDDNoiseSchedule(vocab_size, num_timesteps, schedule_type="sedd_entropy")
+        }
+        
+        # Compare alpha decay curves
+        timesteps = [0, 100, 200, 300, 400, 499]
+        alpha_values = {}
+        
+        for name, schedule in schedules.items():
+            alpha_values[name] = [schedule.get_alpha_for_timestep(t) for t in timesteps]
+        
+        # Each schedule should produce a unique alpha curve
+        # We just check they're not identical - actual values will vary by schedule design
+        schedule_pairs = [
+            ("linear", "cosine"),
+            ("linear", "quadratic"),
+            ("linear", "sedd_entropy"),
+            ("cosine", "quadratic"),
+            ("cosine", "sedd_entropy"),
+            ("quadratic", "sedd_entropy")
+        ]
+        
+        for schedule1, schedule2 in schedule_pairs:
+            assert not np.allclose(alpha_values[schedule1], alpha_values[schedule2]), \
+                f"{schedule1} and {schedule2} should have different alpha profiles"
+        
+        # Test effect on actual tokens
+        x_start = np.array([PROOF_TOKENS])
+        t = 250  # Middle timestep
+        
+        # Apply each schedule and collect preservation metrics
+        preservation_rates = {}
+        for name, schedule in schedules.items():
+            x_t = schedule.q_sample(x_start, t)
+            # Convert to lists for the helper function
+            original_list = x_start[0].tolist()
+            noised_list = x_t[0].tolist()
+            
+            critical_rate = calculate_preservation_rate(
+                original_list, noised_list, CRITICAL_TOKENS
+            )
+            variable_rate = calculate_preservation_rate(
+                original_list, noised_list, VARIABLE_TOKENS
+            )
+            
+            preservation_rates[name] = {
+                "critical": critical_rate,
+                "variables": variable_rate
+            }
+            
+            # The basic assertion all schedules should satisfy
+            assert critical_rate >= 0 and critical_rate <= 100
+            assert variable_rate >= 0 and variable_rate <= 100
+        
+        # Print rates for comparison (useful for debugging)
+        for name, rates in preservation_rates.items():
+            print(f"{name} - Critical: {rates['critical']:.2f}%, Variables: {rates['variables']:.2f}%")
+        
+        # We don't do specific comparisons between schedules as they're probabilistic
+        # But we've collected the data to verify SEDD entropy works
     
     def test_q_sample_numpy(self):
         """Test forward diffusion process with numpy arrays."""
@@ -330,6 +452,118 @@ class TestTokenNoiser:
         
         # We don't assert here because this is probabilistic and could occasionally fail
         # but we print the values for inspection
+    
+    def test_token_noiser_with_sedd_entropy(self):
+        """Test TokenNoiser using the SEDD entropy schedule."""
+        vocab_size = 5000
+        num_timesteps = 500
+        
+        # Create a TokenNoiser with SEDD entropy schedule
+        sedd_noiser = TokenNoiser(
+            vocab_size=vocab_size,
+            num_timesteps=num_timesteps,
+            schedule_type="sedd_entropy"
+        )
+        
+        # Create a TokenNoiser with cosine schedule for comparison
+        cosine_noiser = TokenNoiser(
+            vocab_size=vocab_size,
+            num_timesteps=num_timesteps,
+            schedule_type="cosine"
+        )
+        
+        # Test both with and without hyperschedule at multiple noise levels
+        token_weights = get_math_token_weights(PROOF_TOKENS)
+        
+        # Test across different timesteps
+        timesteps = [50, 250, 450]
+        
+        print("\n" + "="*80)
+        print("COMPARING SEDD ENTROPY VS COSINE SCHEDULES")
+        print("="*80)
+        
+        for t in timesteps:
+            # Test SEDD entropy with hyperschedule
+            sedd_hyper_noised = sedd_noiser.apply_noise(
+                PROOF_TOKENS, t, use_hyperschedule=True, token_weights=token_weights
+            )
+            
+            # Test SEDD entropy without hyperschedule
+            sedd_regular_noised = sedd_noiser.apply_noise(
+                PROOF_TOKENS, t, use_hyperschedule=False
+            )
+            
+            # Test cosine with hyperschedule
+            cosine_hyper_noised = cosine_noiser.apply_noise(
+                PROOF_TOKENS, t, use_hyperschedule=True, token_weights=token_weights
+            )
+            
+            # Test cosine without hyperschedule
+            cosine_regular_noised = cosine_noiser.apply_noise(
+                PROOF_TOKENS, t, use_hyperschedule=False
+            )
+            
+            # Check all results have valid formats
+            for result in [sedd_hyper_noised, sedd_regular_noised, cosine_hyper_noised, cosine_regular_noised]:
+                assert isinstance(result, list)
+                assert len(result) == len(PROOF_TOKENS)
+                assert all(0 <= token < vocab_size for token in result)
+            
+            # Calculate preservation rates for critical tokens
+            sedd_hyper_critical = calculate_preservation_rate(
+                PROOF_TOKENS, sedd_hyper_noised, CRITICAL_TOKENS
+            )
+            
+            sedd_regular_critical = calculate_preservation_rate(
+                PROOF_TOKENS, sedd_regular_noised, CRITICAL_TOKENS
+            )
+            
+            cosine_hyper_critical = calculate_preservation_rate(
+                PROOF_TOKENS, cosine_hyper_noised, CRITICAL_TOKENS
+            )
+            
+            cosine_regular_critical = calculate_preservation_rate(
+                PROOF_TOKENS, cosine_regular_noised, CRITICAL_TOKENS
+            )
+            
+            # Calculate preservation rates for variable tokens
+            sedd_hyper_variable = calculate_preservation_rate(
+                PROOF_TOKENS, sedd_hyper_noised, VARIABLE_TOKENS
+            )
+            
+            sedd_regular_variable = calculate_preservation_rate(
+                PROOF_TOKENS, sedd_regular_noised, VARIABLE_TOKENS
+            )
+            
+            cosine_hyper_variable = calculate_preservation_rate(
+                PROOF_TOKENS, cosine_hyper_noised, VARIABLE_TOKENS
+            )
+            
+            cosine_regular_variable = calculate_preservation_rate(
+                PROOF_TOKENS, cosine_regular_noised, VARIABLE_TOKENS
+            )
+            
+            # Print preservation rates for debugging
+            print(f"\nTIMESTEP {t} (Noise Alpha: SEDD={sedd_noiser.get_noise_level(t):.4f}, Cosine={cosine_noiser.get_noise_level(t):.4f}):")
+            print("-" * 80)
+            print(f"{'Schedule':<15} {'Mode':<15} {'Critical Tokens':<20} {'Variable Tokens':<20} {'Difference'}")
+            print(f"{'SEDD':<15} {'Hyperschedule':<15} {sedd_hyper_critical:>7.2f}% {' ':>12} {sedd_hyper_variable:>7.2f}% {' ':>12} {sedd_hyper_critical-sedd_hyper_variable:>7.2f}%")
+            print(f"{'SEDD':<15} {'Regular':<15} {sedd_regular_critical:>7.2f}% {' ':>12} {sedd_regular_variable:>7.2f}% {' ':>12} {sedd_regular_critical-sedd_regular_variable:>7.2f}%")
+            print(f"{'Cosine':<15} {'Hyperschedule':<15} {cosine_hyper_critical:>7.2f}% {' ':>12} {cosine_hyper_variable:>7.2f}% {' ':>12} {cosine_hyper_critical-cosine_hyper_variable:>7.2f}%")
+            print(f"{'Cosine':<15} {'Regular':<15} {cosine_regular_critical:>7.2f}% {' ':>12} {cosine_regular_variable:>7.2f}% {' ':>12} {cosine_regular_critical-cosine_regular_variable:>7.2f}%")
+            
+            # For each schedule type, hyperschedule should generally preserve critical tokens better
+            # (we don't assert due to randomness, but we print for inspection)
+            
+        # Check that noise levels can be retrieved properly
+        for t in timesteps:
+            sedd_alpha = sedd_noiser.get_noise_level(t)
+            cosine_alpha = cosine_noiser.get_noise_level(t)
+            
+            assert 0 <= sedd_alpha <= 1
+            assert 0 <= cosine_alpha <= 1
+            # Schedules should give different values (not always guaranteed but highly likely)
+            assert abs(sedd_alpha - cosine_alpha) > 1e-6, f"Different schedules should give different alphas at t={t}"
     
     def test_get_noise_level(self):
         """Test retrieving noise levels."""
