@@ -4,7 +4,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-env/
 build/
 develop-eggs/
 dist/
@@ -20,10 +19,13 @@ var/
 .installed.cfg
 *.egg
 
-# Virtualenv
-venv/
-ENV/
+# Pipenv
+Pipfile.lock
+
+# Environment
 .env
+.venv
+env/
 
 # IDE files
 .idea/
@@ -45,3 +47,6 @@ benchmark_results.json
 
 # Docker
 .dockerignore
+
+# Temporary files
+denoiser_input_examples.json

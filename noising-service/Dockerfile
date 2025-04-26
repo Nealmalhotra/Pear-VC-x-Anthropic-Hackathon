@@ -2,9 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy requirements first for better caching
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install pipenv
+RUN pip install pipenv
+
+# Copy Pipfile and Pipfile.lock first for better caching
+COPY Pipfile Pipfile.lock* ./
+# Install dependencies using pipenv
+RUN pipenv install --deploy --system
 
 # Copy the rest of the application
 COPY . .
