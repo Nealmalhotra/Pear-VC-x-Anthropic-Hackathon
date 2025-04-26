@@ -60,7 +60,7 @@ This plan outlines the steps to build the core functionality of the Reverse Deno
     *   Store initial denoising prompt.
     *   **Consider a secondary prompt template** for iterations *after* the first, possibly including Z3's error feedback if available/useful.
 2.  **Create Prompt Building Function:**
-    *   `build_prompt(tokens, alpha_t, lemmas, previous_error=None)` to format the template.
+    *   build_prompt(tokens, alpha_t, lemmas, previous_error=None)` to format the template.
 3.  **Create Claude Client Function:**
     *   Async `call_claude_api(prompt)` using `anthropic`. Handle basic errors.
 4.  **Integrate into Loop:**

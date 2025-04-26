@@ -122,14 +122,22 @@ async def denoise_and_validate(request: DenoiseRequest) -> DenoiseResponse:
         # 6. Check validation and decide next step
         if validation_result.is_valid:
             print(f"Validation SUCCESSFUL in iteration {i + 1}!")
-            # TODO: Implement structured_proof_to_tokens conversion
-            final_clean_tokens_placeholder = [0] # Placeholder
+            
+            # Format the proof for the user
+            proof_steps_str = "\n".join([f"{idx + 1}. {step}" for idx, step in enumerate(parsed_proof.steps)])
+            iteration_str = f"iteration{'s' if i > 0 else ''}"
+            formatted_proof_output = (
+                f"Theorem:\n{parsed_proof.theorem}\n\n" 
+                f"Proof (Validated by Z3 in {i + 1} {iteration_str}):\n"
+                f"{proof_steps_str}\nQ.E.D."
+            )
+            
             return DenoiseResponse(
-                final_clean_tokens=final_clean_tokens_placeholder,
+                formatted_proof=formatted_proof_output.strip(),
                 validation_result=validation_result,
                 iterations_taken=i + 1,
                 debug={
-                    "final_parsed_proof": f"{parsed_proof}",
+                    "final_parsed_proof_obj": f"{parsed_proof}", 
                     "final_z3_code": last_z3_code_str
                     }
             )
@@ -145,21 +153,15 @@ async def denoise_and_validate(request: DenoiseRequest) -> DenoiseResponse:
 
     # If loop finishes without valid proof (due to validation failure or parse error on last iteration)
     # Return the tokens from the last *parsed* attempt, or original if none parsed.
-    # TODO: Implement structured_proof_to_tokens conversion for this return too.
-    final_clean_tokens_placeholder = [0] # Placeholder
-    if last_parsed_proof:
-        # final_clean_tokens_placeholder = structured_proof_to_tokens(last_parsed_proof)
-        pass # Keep placeholder for now
-    else:
-        final_clean_tokens_placeholder = request.noisy_tokens # Fallback to original noisy
-        
+    
+    # No valid proof found, return None for formatted_proof
     return DenoiseResponse(
-        final_clean_tokens=final_clean_tokens_placeholder, 
+        formatted_proof=None,
         validation_result=last_validation_result, 
         iterations_taken=request.max_iterations,
         debug={
             "last_claude_response": last_claude_response_text[:500],
-            "last_parsed_proof": f"{last_parsed_proof}" if last_parsed_proof else "None",
+            "last_parsed_proof_obj": f"{last_parsed_proof}" if last_parsed_proof else "None",
             "last_z3_code": last_z3_code_str if last_z3_code_str else "None",
             }
     )
