@@ -91,3 +91,7 @@ z3-*/
 # dotenv environment variables file
 .env*
 !.env.example 
+
+# Project specific
+denoiser-plan.md
+denoise-prd.md 
