@@ -1,6 +1,7 @@
 import os
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv, find_dotenv
 import re # For extracting text between markers
 import json # To load the tokenizer file
@@ -62,6 +63,22 @@ CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 RETRIEVAL_SERVICE_URL = os.getenv("RETRIEVAL_SERVICE_URL")
 
 app = FastAPI()
+
+# --- Add CORS Middleware --- 
+origins = [
+    "http://localhost", # Allow localhost (no specific port)
+    "http://localhost:3000", # Default Next.js dev port
+    # Add any other origins if needed (e.g., your deployed frontend URL)
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"], # Allow all methods (GET, POST, etc.)
+    allow_headers=["*"], # Allow all headers
+)
+# --- End CORS Middleware ---
 
 # Modified flow: Receive clean text -> Add Noise -> Retrieve -> Prompt -> Call Claude -> Extract -> Encode -> Return
 @app.post("/noise_and_denoise", response_model=DenoiseResponse) # Changed path to reflect action
