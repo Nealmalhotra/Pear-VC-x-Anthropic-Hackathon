@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  tokenizer-service:
+    build:
+      context: ./tokenizer-service
+    ports:
+      - "8001:8000"
+    env_file:
+      - .env
+    environment:
+      - PORT=8000
+      - HOST=0.0.0.0
+    volumes:
+      - ./tokenizer-service:/app
+      - ./libs:/app/libs
+    networks:
+      - proof-network
+
+  noising-service:
+    build:
+      context: ./noising-service
+    ports:
+      - "8002:8000"
+    env_file:
+      - .env
+    environment:
+      - PORT=8000
+      - HOST=0.0.0.0
+      - VOCAB_SIZE=50257
+      - NUM_TIMESTEPS=1000
+      - SCHEDULE_TYPE=cosine
+    volumes:
+      - ./noising-service:/app
+      - ./libs:/app/libs
+    networks:
+      - proof-network
+
+  denoiser-service:
+    build:
+      context: ./denoiser-service
+    ports:
+      - "8003:8000"
+    env_file:
+      - .env
+    environment:
+      - PORT=8000
+      - HOST=0.0.0.0
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    volumes:
+      - ./denoiser-service:/app
+      - ./libs:/app/libs
+    depends_on:
+      - tokenizer-service
+      - noising-service
+    networks:
+      - proof-network
+
+  retrieval-ui-service:
+    build:
+      context: ./retrieval-ui-service
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - TOKENIZER_URL=http://tokenizer-service:8000
+      - NOISING_URL=http://noising-service:8000
+      - DENOISER_URL=http://denoiser-service:8000
+    volumes:
+      - ./retrieval-ui-service:/app
+      - ./libs:/app/libs
+    depends_on:
+      - tokenizer-service
+      - noising-service
+      - denoiser-service
+    networks:
+      - proof-network
+
+networks:
+  proof-network:
+    driver: bridge 

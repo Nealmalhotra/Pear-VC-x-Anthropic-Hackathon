@@ -8,17 +8,19 @@ import json # To load the tokenizer file
 from tokenizers import Tokenizer # Use the actual library
 
 # Import schema updates
-from core.schemas import DenoiseRequest, DenoiseResponse # Removed ValidationResult
-from core.retrieval_client import get_relevant_lemmas
+from .schemas import DenoiseRequest, DenoiseResponse # Removed ValidationResult
+from .retrieval_client import get_relevant_lemmas
 # Import might be unused now
-# from core.prompts import build_prompt, Z3_TRANSLATION_PROMPT_TEMPLATE
-from core.claude_client import call_claude_api
+# from .prompts import build_prompt, Z3_TRANSLATION_PROMPT_TEMPLATE
+from .claude_client import call_claude_api
 from utils.noisifier import add_noise_to_text # Import the new noisifier
 # Removed unused parser/validator imports
 
 # --- Tokenizer Loading and Implementation ---
 
-TOKENIZER_PATH = "math_tokenizer.json"
+# Get the directory where this script (main.py) is located
+script_dir = os.path.dirname(os.path.abspath(__file__))
+TOKENIZER_PATH = os.path.join(script_dir, "math_tokenizer.json") # Path relative to this script
 _tokenizer: Optional[Tokenizer] = None
 
 def load_tokenizer():

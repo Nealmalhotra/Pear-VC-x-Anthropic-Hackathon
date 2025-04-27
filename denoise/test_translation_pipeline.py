@@ -5,25 +5,25 @@ from typing import List, Dict, Any
 
 # Add core directory to sys.path to allow imports
 # Assumes this script is in the project root
-project_root = os.path.dirname(os.path.abspath(__file__))
-core_dir = os.path.join(project_root, 'core')
-if core_dir not in sys.path:
-    sys.path.insert(0, core_dir)
+# project_root = os.path.dirname(os.path.abspath(__file__))
+# core_dir = os.path.join(project_root, 'core')
+# if core_dir not in sys.path:
+#     sys.path.insert(0, core_dir)
 
 from dotenv import load_dotenv, find_dotenv
 
 # Import necessary functions from the core modules
 try:
     # Need to ensure core modules are importable from project root
-    from core.retrieval_client import get_relevant_lemmas
-    from core.prompts import build_prompt, Z3_TRANSLATION_PROMPT_TEMPLATE
-    from core.claude_client import call_claude_api, CLAUDE_API_KEY # Check if API key is loaded
-    from core.parsing import parse_claude_response, ClaudeResponseParseError
-    from core.validator import validate_proof_with_z3 # Add validator import
+    from .retrieval_client import get_relevant_lemmas
+    from .prompts import build_prompt, Z3_TRANSLATION_PROMPT_TEMPLATE
+    from .claude_client import call_claude_api, CLAUDE_API_KEY # Check if API key is loaded
+    from .parsing import parse_claude_response, ClaudeResponseParseError
+    from .validator import validate_proof_with_z3 # Add validator import
 except ImportError as e:
     print(f"Error importing core modules: {e}")
-    print("Ensure you are running this script from the project root directory ({project_root})")
-    print(f"Looking for core modules in: {core_dir}")
+    # print("Ensure you are running this script from the project root directory ({project_root})")
+    # print(f"Looking for core modules in: {core_dir}")
     print(f"Current sys.path: {sys.path}")
     sys.exit(1)
 
