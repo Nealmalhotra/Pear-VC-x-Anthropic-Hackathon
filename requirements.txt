@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+pydantic
+httpx
+python-dotenv
+anthropic
+z3-solver
+pinecone
+openai
+requests
+tqdm
+tokenizers
