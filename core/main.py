@@ -87,6 +87,16 @@ async def noise_and_denoise_text(request: DenoiseRequest) -> DenoiseResponse:
     try:
         retrieved_lemmas = await get_relevant_lemmas(retrieval_query_text, top_k=request.top_k)
         print(f"Retrieved {len(retrieved_lemmas)} lemmas based on noisy text.")
+        print("--- Retrieved Documents (Lemmas) ---")
+        if retrieved_lemmas:
+            for i, lemma in enumerate(retrieved_lemmas):
+                lemma_id = lemma.get('id', 'N/A')
+                score = lemma.get('score', 'N/A')
+                text_preview = lemma.get('text', 'No text available') # Preview first 100 chars
+                print(f"  {i+1}. ID: {lemma_id}, Score: {score:.4f}, Text: '{text_preview}...'")
+        else:
+            print("  No documents retrieved.")
+        print("------------------------------------")
     except Exception as e:
         print(f"[Error] Failed during lemma retrieval: {e}")
         raise HTTPException(status_code=500, detail=f"Failed during lemma retrieval: {e}")
